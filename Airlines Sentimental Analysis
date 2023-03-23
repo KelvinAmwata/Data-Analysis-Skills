@@ -1,1 +1,214 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+Q1: Loading the required packages (including rtweet) in RStudio
+```{r}
+library(tidyverse)
+library(tidytext)
+library(rtweet)
+library(ggplot2)
+library(dplyr)
+```
+```{r}
+get_token()
+```
+Q2. Reading in the Airline data
+```{r}
+
+df <-read_csv("http://www.itk.ilstu.edu/faculty/jrwolf/airlinetweets.csv")
+head(df,10)
+
+```
+showing the tweets per day by airline. (use ts_plot)
+
+```{r}
+df%>%
+  group_by(airline)%>%
+  ts_plot("day")+labs(x="Day",y="Number of Tweets")
+# The code groups the results by airline. 
+# From the results, it is clear that the American airline had more tweets from 21st to 23rd after trailing the others on the previous days. There probably might have 
+# been a campaign by the company to increase media visibility on twitter
+```
+
+Q4. Tokenizing the tweets by word
+```{r}
+df$text <-gsub("https\\S+"," ",df$text)
+df.airline <- df%>%
+  select(text,created_at,airline)%>%
+  unnest_tokens(word,text)
+
+head(df.airline,20)
+# This code helps us remove tweets with urls
+# We remain with the creation date, airline, and word. 
+```
+
+
+Q5. Removing stop words
+```{r}
+df.airline <- df.airline%>%
+  anti_join(stop_words)
+# Removes words that do not provide us with any meaningful information
+# These are words such as I am, she'll, they are e.t.c
+```
+
+
+Q6 Removing airline name from word list
+```{r}
+
+
+df.airline <- df.airline%>%
+  filter(!str_detect(word,"virginamerica")&!str_detect(word,"united") &!str_detect(word,"usairways") &!str_detect(word,"usair")&!str_detect(word,"usairway") &!str_detect(word,"usaiways") &!str_detect(word,"southwest") &!str_detect(word,"south") &!str_detect(word,"delta")&!str_detect(word,"virgin") &!str_detect(word,"americanair")&!str_detect(word,"american"))
+
+View(df.airline)
+# We remove the names of the airlines from the tweet. These are the tweets that are from the airlines themselves
+# We want to remain with the opinions of customers and not what the individual airlines say
+
+```
+ Displaying the top 10 most frequent words (all tweets)
+```{r}
+
+df.airline <- df.airline%>%
+  filter(str_detect(word,"[a-z]"))
+  
+  # Removing numerals 
+
+df.airline.bing <- df.airline%>%
+  inner_join(get_sentiments("bing"))%>%
+  count(word,sentiment,sort=TRUE)%>%
+  ungroup()
+head(df.airline.bing,10)
+
+# Since the results of the top 10 words contain a numeral, I first of all do a filter to remain with words that contain alphabets
+# I innerjoin to get the sentiments of the words-either negative or positive
+
+```
+
+Graphing the number of positive and negative words (all tweets) (use Bing)
+
+```{r}
+df.airline.bing%>% 
+ggplot(aes(x= sentiment, fill = sentiment)) + 
+  geom_bar(show.legend = FALSE) + 
+  labs(title = "Airline Tweets",
+       x = NULL,
+       y = "Number of Tweets") +
+  theme_bw()
+# We show the number of negative and positive tweets for all the airlines.
+# From the results, it is clear that overall, the number of negative tweets are more than the positive tweets
+
+```
+
+ Graphing the 10 most frequent positive and negative words (all tweets) (use Bing)
+
+```{r}
+
+df.airline.bing <- df.airline%>%
+  inner_join(get_sentiments("bing"))%>%
+  count(word,sentiment,sort=TRUE)%>%
+  ungroup()
+
+df.airline.bing%>%
+  group_by(sentiment)%>%
+  top_n(10)%>%
+  ungroup()%>%
+  mutate(word=reorder(word,n))%>%
+  
+  ggplot(aes(x=word,y=n,fill=sentiment))+geom_col(show.legend = FALSE)+facet_wrap(~sentiment,scales="free_y")+labs(title="#Airline Tweets",x=NULL,Y="Sentiment Numbers")+coord_flip()+theme_bw()
+# We inner join to get the sentiments for the top 10 positive and negative words
+# The results show that when the top 10 positive and negative tweets are considered, there were more negative tweets than 
+  
+
+```
+
+Q10. Graphing the 10 most frequent positive and negative words (all tweets) (using Bing) (for each airline)
+
+
+```{r}
+df.airline.bing1 <- df.airline %>% group_by(airline) %>%
+  inner_join(get_sentiments("bing")) %>% 
+  count(word,sentiment,sort = TRUE) %>% 
+  ungroup()
+
+
+
+
+head(df.airline.bing1,10)
+```
+
+
+Graphing the Top ten airlines 
+```{r}
+df.airline.bing1 %>%
+  group_by(airline, sentiment) %>% 
+  top_n(10) %>% ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot(aes(x= word, y = n, fill = sentiment)) + geom_col(show.legend = FALSE) + facet_wrap(~airline+sentiment, scales = "free_y")+ 
+  labs(title = "10 most frequent positive and negative words",
+       x = NULL,
+       y = "Contibution to sentiment") +
+  coord_flip() + 
+  theme_bw()
+  
+  # We consider the positive and negative words for each airline
+#  The results show that all airlines apart from virgin america had more negative words than positive words 
+  
+```
+Calculating the sentiment scores for each word using AFINN
+```{r}
+
+df.airline.afinn <-  df.airline %>% 
+  inner_join(get_sentiments("afinn")) 
+head(df.airline.afinn,10)
+# We use afinn to get the sentimental scores
+# Inner join 
+
+```
+
+Graphing the sentiment scores  for all tweets 
+```{r}
+df.airline.afinn%>%
+  ggplot(aes(x=value))+geom_histogram(binwidth = 1, alpha = .25, color="darkblue", fill="blue")+theme_bw()
+# The graphing of the afinn scores using the histogram shows that the distributions on the negative are more than those on the positive
+#These results are consistant with the bing ones
+```
+ Graphing the sentiment scores for each airline
+```{r}
+df.airline.afinn%>%
+  ggplot(aes(x=value))+geom_histogram(binwidth = 1, alpha = .25, color="darkblue", fill="blue")+theme_bw()+facet_wrap(~airline)
+# The graphing of the histogram shows that allthe airlines apart from virgin America had more negative than positive words
+#This is consistent with the bing results
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
